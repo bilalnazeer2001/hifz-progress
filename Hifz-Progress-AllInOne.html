@@ -546,6 +546,9 @@ let SETTINGS = {madrasa: "", teacher: ""};
 
 function nav(view, extra = {}){
   Object.assign(state, {view}, extra);
+  // each screen becomes a history entry so the phone's back button
+  // walks back through the app instead of closing it
+  history.pushState(JSON.parse(JSON.stringify(state)), "");
   render();
   window.scrollTo({top: 0});
 }
@@ -771,6 +774,8 @@ function openModal(html){
   $(".modal-back").addEventListener("click", e => {
     if (e.target.classList.contains("modal-back") || e.target.closest("[data-close]")) closeModal();
   });
+  // own history entry so the phone's back button closes the popup
+  history.pushState({...JSON.parse(JSON.stringify(state)), __modal: true}, "");
 }
 function closeModal(){ $("#modalRoot").innerHTML = ""; }
 
@@ -1603,7 +1608,21 @@ function applyTheme(t){
     nav(t.dataset.tab);
   });
 
-  window.addEventListener("afterprint", () => { $("#print-root").innerHTML = ""; });
+  // NOTE: do not clear #print-root on "afterprint" — on Android the event
+  // fires while the PDF is still being made, which produced blank reports.
+  // The print area is invisible on screen and each report overwrites it.
+
+  // phone back button: walk back through screens; close an open popup first
+  history.replaceState(JSON.parse(JSON.stringify(state)), "");
+  window.addEventListener("popstate", e => {
+    if ($("#modalRoot").innerHTML){ closeModal(); return; }
+    if (e.state && e.state.__modal){ history.back(); return; } // skip stale popup entries
+    if (e.state){
+      Object.assign(state, e.state);
+      render();
+      window.scrollTo({top: 0});
+    }
+  });
 
   // offline support: register service worker when served over http(s)
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")){
