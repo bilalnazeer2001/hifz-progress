@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A3B2E">
+<title>Hifz Progress — Madrasa Manager</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M30 6a18 18 0 1 0 0 36 22 22 0 0 1 0-36z" fill="var(--gold)"/>
+        <circle cx="36" cy="13" r="3" fill="var(--gold)"/>
+      </svg>
+      <div>
+        <div class="brand-name" id="brandName">Hifz Progress</div>
+        <div class="brand-sub" id="brandSub">Quran Memorization Manager</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="themeToggle" title="Switch dark / light mode" aria-label="Switch theme">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path id="themeIcon" fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+      </button>
+    </div>
+  </div>
+  <nav class="tabs" id="mainTabs">
+    <button class="tab active" data-tab="dashboard">Dashboard</button>
+    <button class="tab" data-tab="analytics">Analytics</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+</header>
+
+<main id="app" class="app"></main>
+
+<div id="modalRoot"></div>
+<div id="toast" class="toast" role="status"></div>
+<section id="print-root" class="print-root"></section>
+
+<script src="quran-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "Hifz Progress — Madrasa Manager",
+  "short_name": "Hifz Progress",
+  "description": "Offline Quran memorization progress tracker for madrasa teachers",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6F3EA",
+  "theme_color": "#0A3B2E",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}
