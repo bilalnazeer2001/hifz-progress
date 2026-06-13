@@ -1627,22 +1627,95 @@ function download(filename, text, type = "application/json"){
 function csvCell(v){ v = String(v ?? ""); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 
 /* ================= CLOUD SYNC (Firebase) ================= */
-/* Stage 1: Google sign-in only. Signing in proves who the teacher is;
-   it does NOT yet move any data — that comes in the next stage, gated by
-   admin approval. The app works fully without ever signing in. */
+/* Stage 2a: Google sign-in + admin approval of teachers.
+   Each teacher who signs in gets a record in the "teachers" collection,
+   not approved by default. The admin (CLOUD.adminEmail) approves them here.
+   Actual student-data sharing (next stage) will be gated on approval.
+   The app works fully without ever signing in. */
+const isAdminEmail = e => (e || "").toLowerCase() === CLOUD.adminEmail.toLowerCase();
+
+async function ensureProfile(user){
+  const admin = isAdminEmail(user.email);
+  const ref = CLOUD.db.collection("teachers").doc(user.uid);
+  try {
+    const snap = await ref.get();
+    if (!snap.exists){
+      const data = {
+        email: user.email || "", name: user.displayName || "",
+        role: admin ? "admin" : "teacher", approved: admin,
+        requestedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await ref.set(data);
+      return {approved: admin, role: data.role};
+    }
+    const d = snap.data();
+    if (admin && (d.role !== "admin" || !d.approved)){
+      try { await ref.update({role: "admin", approved: true}); } catch (e) {}
+      return {approved: true, role: "admin"};
+    }
+    return {approved: !!d.approved, role: d.role || "teacher"};
+  } catch (e){
+    return {error: e.message || "Could not reach the database"};
+  }
+}
+
 function cloudBoxHtml(){
   const u = CLOUD.user;
   if (!u){
     return `<p class="page-sub">Sign in with your Google account so this madrasa's data can be shared between teachers. You stay in control of who is allowed in.</p>
       <button class="btn gold" id="cloudSignIn">Sign in with Google</button>`;
   }
-  return `<p class="page-sub">Signed in as <b>${esc(u.displayName || "")}</b><br>${esc(u.email || "")}</p>
-    <p class="page-sub">✅ Sign-in works. Sharing of student data will be switched on in the next step, once the admin approves teacher accounts.</p>
-    <button class="btn ghost" id="cloudSignOut">Sign out</button>`;
+  const head = `<p class="page-sub">Signed in as <b>${esc(u.displayName || "")}</b><br>${esc(u.email || "")}</p>`;
+  const p = CLOUD.profile;
+  let body;
+  if (!p) body = `<p class="page-sub">Checking your access…</p>`;
+  else if (p.error) body = `<p class="page-sub">⚠️ Couldn't reach the database — make sure Firestore is set up. <br><small>${esc(p.error)}</small></p>`;
+  else if (p.role === "admin") body = `<p class="page-sub">✅ You are the <b>admin</b>. Approve teachers below. (Sharing of student data switches on in the next step.)</p>
+      <div id="adminPanel"><p class="page-sub">Loading teachers…</p></div>`;
+  else if (p.approved) body = `<p class="page-sub">✅ Approved. Your device will share the madrasa's data once syncing is switched on (next step).</p>`;
+  else body = `<p class="page-sub">⏳ Your account is waiting for the admin to approve it. You'll get access as soon as they do.</p>`;
+  return head + body + `<div style="margin-top:8px"><button class="btn ghost" id="cloudSignOut">Sign out</button></div>`;
 }
 function refreshCloudBox(){
   const box = $("#cloudBox");
-  if (box){ box.innerHTML = cloudBoxHtml(); wireCloudButtons(); }
+  if (!box) return;
+  box.innerHTML = cloudBoxHtml();
+  wireCloudButtons();
+  if (CLOUD.user && CLOUD.profile && CLOUD.profile.role === "admin") loadAdminPanel();
+}
+async function loadAdminPanel(){
+  const el = $("#adminPanel");
+  if (!el) return;
+  let teachers;
+  try {
+    const q = await CLOUD.db.collection("teachers").get();
+    teachers = q.docs.map(d => ({uid: d.id, ...d.data()}));
+  } catch (e){ el.innerHTML = `<p class="page-sub">Couldn't load teachers: ${esc(e.message)}</p>`; return; }
+  const others = teachers.filter(t => !isAdminEmail(t.email));
+  if (!others.length){
+    el.innerHTML = `<p class="page-sub">No other teachers have signed in yet. When a teacher signs in on their phone, they'll appear here for you to approve.</p>`;
+    return;
+  }
+  others.sort((a, b) => (a.approved === b.approved) ? 0 : a.approved ? 1 : -1);
+  el.innerHTML = others.map(t => `
+    <div class="reg-row" data-uid="${esc(t.uid)}">
+      <span class="reg-name">${esc(t.name || t.email)}<br><small style="color:var(--ink-soft)">${esc(t.email)}${t.approved ? " · approved" : " · pending"}</small></span>
+      <span>${t.approved
+        ? `<button class="btn sm ghost" data-act="revoke">Remove</button>`
+        : `<button class="btn sm gold" data-act="approve">Approve</button>`}</span>
+    </div>`).join("");
+  el.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", async () => {
+    const uid = b.closest("[data-uid]").dataset.uid;
+    const approve = b.dataset.act === "approve";
+    b.disabled = true;
+    try {
+      await CLOUD.db.collection("teachers").doc(uid).update(approve
+        ? {approved: true, approvedAt: firebase.firestore.FieldValue.serverTimestamp()}
+        : {approved: false});
+      toast(approve ? "Teacher approved" : "Access removed");
+      loadAdminPanel();
+    } catch (e){ toast("Failed: " + e.message); b.disabled = false; }
+  }));
 }
 function wireCloudButtons(){
   const inBtn = $("#cloudSignIn"), outBtn = $("#cloudSignOut");
@@ -1827,9 +1900,14 @@ function applyTheme(t){
 
   // cloud sign-in state: update the Settings card whenever it changes
   if (CLOUD.ready){
-    CLOUD.auth.onAuthStateChanged(user => {
+    CLOUD.auth.onAuthStateChanged(async user => {
       CLOUD.user = user;
-      if (state.view === "settings") refreshCloudBox();
+      CLOUD.profile = null;
+      if (state.view === "settings") refreshCloudBox();   // show "checking…"
+      if (user){
+        CLOUD.profile = await ensureProfile(user);
+        if (state.view === "settings") refreshCloudBox();
+      }
     });
   }
 

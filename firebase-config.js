@@ -7,7 +7,11 @@
    working as a normal offline, device-only tracker. So everything here is
    wrapped so a failure never breaks the rest of the app. */
 (function () {
-  window.CLOUD = { ready: false, auth: null, user: null };
+  window.CLOUD = {
+    ready: false, auth: null, db: null, user: null,
+    profile: null,                       // {approved, role} for the signed-in teacher
+    adminEmail: "sumayyanazeer098@gmail.com"   // this account approves other teachers
+  };
 
   if (typeof firebase === "undefined" || !firebase.initializeApp) {
     // SDK not present (offline first load, or the single-file build) — stay local-only.
@@ -24,6 +28,10 @@
       appId: "1:275243672947:web:787474447ef01457885106"
     });
     window.CLOUD.auth = firebase.auth();
+    window.CLOUD.db = firebase.firestore();
+    // keep working offline and sync when back online
+    if (window.CLOUD.db.enablePersistence)
+      window.CLOUD.db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
     window.CLOUD.ready = true;
   } catch (e) {
     console.warn("Firebase init skipped:", e && e.message);

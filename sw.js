@@ -1,6 +1,6 @@
 /* Hifz Progress — offline service worker */
-const CACHE = "hifz-v11";
-const ASSETS = ["./","index.html","styles.css","app.js","quran-data.js","fonts/scheherazade-arabic.woff2","vendor/firebase-app-compat.js","vendor/firebase-auth-compat.js","firebase-config.js","manifest.json","icon.svg","icon-192.png","icon-512.png"];
+const CACHE = "hifz-v12";
+const ASSETS = ["./","index.html","styles.css","app.js","quran-data.js","fonts/scheherazade-arabic.woff2","vendor/firebase-app-compat.js","vendor/firebase-auth-compat.js","vendor/firebase-firestore-compat.js","firebase-config.js","manifest.json","icon.svg","icon-192.png","icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

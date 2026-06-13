@@ -57,6 +57,7 @@ def main():
         # app.js falls back to its local-only CLOUD stub automatically.
         (r'\s*<script src="vendor/firebase-app-compat\.js"></script>', ""),
         (r'\s*<script src="vendor/firebase-auth-compat\.js"></script>', ""),
+        (r'\s*<script src="vendor/firebase-firestore-compat\.js"></script>', ""),
         (r'\s*<script src="firebase-config\.js"></script>', ""),
         # Inline the three external files in place of their tags.
         (r'<link rel="stylesheet" href="styles\.css">',
