@@ -4,6 +4,11 @@
    ============================================================ */
 "use strict";
 
+// Cloud sync is optional. firebase-config.js sets window.CLOUD when the
+// Firebase SDK is present (hosted app). In the offline single-file build it
+// is absent, so fall back to a local-only stub — the app never depends on it.
+window.CLOUD = window.CLOUD || { ready: false, auth: null, user: null };
+
 /* ================= QURAN ENGINE ================= */
 // QURAN, JUZ_STARTS, CHARS_PER_LINE come from quran-data.js (local file)
 
@@ -1229,6 +1234,42 @@ function download(filename, text, type = "application/json"){
 }
 function csvCell(v){ v = String(v ?? ""); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 
+/* ================= CLOUD SYNC (Firebase) ================= */
+/* Stage 1: Google sign-in only. Signing in proves who the teacher is;
+   it does NOT yet move any data — that comes in the next stage, gated by
+   admin approval. The app works fully without ever signing in. */
+function cloudBoxHtml(){
+  const u = CLOUD.user;
+  if (!u){
+    return `<p class="page-sub">Sign in with your Google account so this madrasa's data can be shared between teachers. You stay in control of who is allowed in.</p>
+      <button class="btn gold" id="cloudSignIn">Sign in with Google</button>`;
+  }
+  return `<p class="page-sub">Signed in as <b>${esc(u.displayName || "")}</b><br>${esc(u.email || "")}</p>
+    <p class="page-sub">✅ Sign-in works. Sharing of student data will be switched on in the next step, once the admin approves teacher accounts.</p>
+    <button class="btn ghost" id="cloudSignOut">Sign out</button>`;
+}
+function refreshCloudBox(){
+  const box = $("#cloudBox");
+  if (box){ box.innerHTML = cloudBoxHtml(); wireCloudButtons(); }
+}
+function wireCloudButtons(){
+  const inBtn = $("#cloudSignIn"), outBtn = $("#cloudSignOut");
+  if (inBtn) inBtn.addEventListener("click", cloudSignIn);
+  if (outBtn) outBtn.addEventListener("click", () => CLOUD.auth.signOut());
+}
+function cloudSignIn(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  // try a popup first (most reliable across devices); if the phone blocks it,
+  // fall back to a full-page redirect sign-in
+  CLOUD.auth.signInWithPopup(provider).catch(err => {
+    const code = err && err.code;
+    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment" || code === "auth/cancelled-popup-request")
+      CLOUD.auth.signInWithRedirect(provider).catch(e2 => toast("Sign-in failed: " + e2.message));
+    else if (code !== "auth/popup-closed-by-user")
+      toast("Sign-in failed: " + (err && err.message));
+  });
+}
+
 async function renderSettings(app){
   app.innerHTML = `
     <h1 class="page-title">Settings</h1>
@@ -1242,6 +1283,12 @@ async function renderSettings(app){
       </div>
       <button class="btn gold" id="saveSettings">Save details</button>
     </div>
+
+    ${CLOUD.ready ? `
+    <div class="card" style="margin-bottom:12px">
+      <h3>Cloud sync (share with other teachers)</h3>
+      <div id="cloudBox">${cloudBoxHtml()}</div>
+    </div>` : ""}
 
     <div class="card" style="margin-bottom:12px">
       <h3>Backup & restore</h3>
@@ -1275,6 +1322,8 @@ async function renderSettings(app){
     $("#brandName").textContent = SETTINGS.madrasa || "Hifz Progress";
     toast("Saved");
   });
+
+  if (CLOUD.ready) wireCloudButtons();
 
   $("#backupBtn").addEventListener("click", async () => {
     const data = {
@@ -1382,6 +1431,14 @@ function applyTheme(t){
   // offline support: register service worker when served over http(s)
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")){
     navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+
+  // cloud sign-in state: update the Settings card whenever it changes
+  if (CLOUD.ready){
+    CLOUD.auth.onAuthStateChanged(user => {
+      CLOUD.user = user;
+      if (state.view === "settings") refreshCloudBox();
+    });
   }
 
   render();

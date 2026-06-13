@@ -51,6 +51,13 @@ def main():
         (r'\s*<link rel="manifest"[^>]*>', ""),
         (r'\s*<link rel="icon"[^>]*>', ""),
         (r'\s*<link rel="apple-touch-icon"[^>]*>', ""),
+        # Cloud sync needs a real web origin for Google sign-in, which a
+        # double-clicked file:// page can't provide — so the single-file
+        # build is the offline, device-only version. Strip Firebase out;
+        # app.js falls back to its local-only CLOUD stub automatically.
+        (r'\s*<script src="vendor/firebase-app-compat\.js"></script>', ""),
+        (r'\s*<script src="vendor/firebase-auth-compat\.js"></script>', ""),
+        (r'\s*<script src="firebase-config\.js"></script>', ""),
         # Inline the three external files in place of their tags.
         (r'<link rel="stylesheet" href="styles\.css">',
          lambda m: "<style>\n" + css + "\n</style>"),
