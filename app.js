@@ -295,7 +295,7 @@ async function renderDashboard(app){
           const v = r ? (ses === "attendance" ? r.attendance : r.attendance2) : undefined;
           return `<div class="reg-row" data-id="${st.id}">
             <span class="reg-name">${esc(st.name)}</span>
-            <span class="att-mini">${["present","absent","leave","sick"].map(a =>
+            <span class="att-mini">${["present","absent","leave"].map(a =>
               `<button data-v="${a}" class="${v === a ? "on-" + a : ""}" title="${a[0].toUpperCase() + a.slice(1)}" aria-label="${a}">${a[0].toUpperCase()}</button>`).join("")}</span>
           </div>`;
         }).join("")}
@@ -640,7 +640,7 @@ async function renderProfile(app){
           <tr><td>Contact</td><td><a href="tel:${esc(st.parentPhone)}">${esc(st.parentPhone || "—")}</a></td></tr>
           <tr><td>Address</td><td>${esc(st.address || "—")}</td></tr>
           <tr><td>Current surah</td><td>${esc(surah(st.currentSurah || 1).en)} — <span class="arabic">${esc(surah(st.currentSurah || 1).ar)}</span></td></tr>
-          <tr><td>Attendance detail</td><td>${sum.present} present · ${sum.absent} absent · ${sum.leave} leave · ${sum.sick} sick</td></tr>
+          <tr><td>Attendance detail</td><td>${sum.present} present · ${sum.absent} absent · ${sum.leave + sum.sick} leave</td></tr>
           <tr><td>Notes</td><td>${esc(st.notes || "—")}</td></tr>
         </table>
       </div>
@@ -715,7 +715,7 @@ async function renderEntry(app){
       <div style="margin-top:10px">
         <label style="font-size:.8rem;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px">${lbl}</label>
         <div class="seg att-seg" data-ses="${key}">
-          ${["present","absent","leave","sick"].map(a => `<button data-v="${a}" class="${rec[key] === a ? "active" + (a === "absent" ? " absent" : "") : ""}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("")}
+          ${["present","absent","leave"].map(a => `<button data-v="${a}" class="${rec[key] === a ? "active" + (a === "absent" ? " absent" : "") : ""}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("")}
         </div>
       </div>`).join("")}
     </div>
@@ -1070,8 +1070,8 @@ async function weeklyReport(studentId, anyDate, opts){
       {v: Math.round((s.sabaqi + s.manzil) * 100) / 100, l: "Juz revised"}
     ])}
     <div class="r-sec">Attendance (morning + evening sessions)</div>
-    <table><tr><th>Present</th><th>Absent</th><th>Leave</th><th>Sick</th><th>Attendance %</th></tr>
-    <tr><td>${s.present}</td><td>${s.absent}</td><td>${s.leave}</td><td>${s.sick}</td><td>${s.attendancePct}%</td></tr></table>
+    <table><tr><th>Present</th><th>Absent</th><th>Leave</th><th>Attendance %</th></tr>
+    <tr><td>${s.present}</td><td>${s.absent}</td><td>${s.leave + s.sick}</td><td>${s.attendancePct}%</td></tr></table>
     <div class="r-sec">Summary of the Week</div>
     <table>
       <tr><th>New lesson (Sabaq)</th><td>${Math.round(s.lines * 10) / 10} lines · ${s.ayahs} ayahs · ${s.sabaqDays} day(s) completed · ${s.sabaqMissed} missed</td></tr>

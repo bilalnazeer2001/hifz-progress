@@ -243,7 +243,7 @@ a{color:var(--emerald)}
 .seg button.active{background:var(--emerald);color:#fff;border-color:var(--emerald)}
 .seg button.active.absent,.section-status .seg button.active.missed,.seg button.active[data-v="missed"]{background:var(--danger);border-color:var(--danger)}
 .lesson-card{border-left:4px solid var(--gold);margin-bottom:14px}
-.quran-preview{background:var(--surface-2);border:1.5px solid var(--line);border-radius:var(--r-md);padding:16px;margin-top:10px;font-size:1.3rem;max-height:240px;overflow:auto}
+.quran-preview{background:var(--surface-2);border:1.5px solid var(--line);border-radius:var(--r-md);padding:18px;margin-top:10px;font-size:1.6rem;line-height:2.3;max-height:280px;overflow:auto}
 .quran-preview .vnum{font-family:var(--font-ui);font-size:.68rem;color:#8A6D10;background:var(--gold-soft);border-radius:99px;padding:1px 7px;margin:0 6px;direction:ltr;display:inline-block}
 [data-theme="dark"] .quran-preview .vnum{color:var(--gold-bright)}
 .calc-line{font-size:.86rem;color:var(--ink-soft);margin-top:8px}
