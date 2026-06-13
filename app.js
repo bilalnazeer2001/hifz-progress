@@ -141,16 +141,20 @@ async function getSetting(key, def){
 const setSetting = (key, value) => dbPut("settings", {key, value});
 
 /* ================= RECORD AGGREGATION ================= */
+// a record holds one or two attendance sessions:
+// old records have only `attendance`; new ones add `attendance2` (evening)
+const attSessions = r => r.attendance2 === undefined ? [r.attendance] : [r.attendance, r.attendance2];
+
 function summarize(records){
   const sum = {
     lines: 0, ayahs: 0, sabaqDays: 0, sabaqMissed: 0,
     sabaqi: 0, sabaqiDays: 0, sabaqiMissed: 0,
     manzil: 0, manzilDays: 0, manzilMissed: 0,
-    present: 0, absent: 0, leave: 0, sick: 0, total: records.length,
+    present: 0, absent: 0, leave: 0, sick: 0, total: 0,
     juzCompleted: [], juzTouched: new Set()
   };
   for (const r of records){
-    sum[r.attendance] = (sum[r.attendance] || 0) + 1;
+    for (const a of attSessions(r)){ sum[a] = (sum[a] || 0) + 1; sum.total++; }
     if (r.sabaq){
       if (r.sabaq.status === "completed"){
         sum.sabaqDays++;
@@ -245,8 +249,8 @@ async function renderDashboard(app){
 
   const today = todayStr();
   const todayRecs = allRecords.filter(r => r.date === today);
-  const presentToday = todayRecs.filter(r => r.attendance === "present").length;
-  const absentToday = todayRecs.filter(r => r.attendance !== "present").length;
+  const presentToday = todayRecs.filter(r => attSessions(r).includes("present")).length;
+  const absentToday = todayRecs.filter(r => !attSessions(r).includes("present")).length;
   const weekAgo = new Date(Date.now() - 6 * 864e5).toLocaleDateString("en-CA");
   const monthKey = today.slice(0, 7);
   let weekLines = 0, monthLines = 0;
@@ -439,8 +443,10 @@ function ring(pct, color, size = 86, label = ""){
 }
 function describeRecord(r){
   const parts = [];
-  const att = {present:"Present", absent:"Absent", leave:"Leave", sick:"Sick"}[r.attendance];
-  parts.push(att);
+  const ATT = {present:"Present", absent:"Absent", leave:"Leave", sick:"Sick"};
+  parts.push(r.attendance2 === undefined
+    ? ATT[r.attendance]
+    : `Morning: ${ATT[r.attendance]} · Evening: ${ATT[r.attendance2]}`);
   if (r.sabaq && r.sabaq.status === "completed"){
     if (r.sabaq.mode === "portion"){
       const s = surah(r.sabaq.surah);
@@ -506,7 +512,7 @@ async function renderProfile(app){
       </div>
       <div class="card ring-card">
         ${ring(sum.attendancePct, "var(--emerald)")}
-        <div><div class="ring-num">${sum.present} / ${sum.total} days</div><div class="ring-lbl">Attendance</div></div>
+        <div><div class="ring-num">${sum.present} / ${sum.total} sessions</div><div class="ring-lbl">Attendance</div></div>
       </div>
     </div>
 
@@ -574,7 +580,7 @@ async function renderEntry(app){
 
   // editable working copy
   const rec = existing ? JSON.parse(JSON.stringify(existing)) : {
-    studentId: st.id, date, attendance: "present",
+    studentId: st.id, date, attendance: "present", attendance2: "present",
     sabaq: {status: "completed", mode: "portion", surah: last ? last.surah : (st.currentSurah || 1),
             fromAyah: last ? Math.min(last.toAyah + 1, surah(last.surah).v.length) : 1,
             toAyah: last ? Math.min(last.toAyah + 1, surah(last.surah).v.length) : 1, lines: "", ayahs: 0, estLines: 0},
@@ -582,6 +588,8 @@ async function renderEntry(app){
     manzil: {status: "completed", items: [{juz: Math.max(1, (st.currentJuz || 1) - 1), amount: 0.5}]},
     notes: ""
   };
+  // old records had only one attendance per day — start evening from morning's value
+  if (rec.attendance2 === undefined) rec.attendance2 = rec.attendance;
   if (!rec.sabaq) rec.sabaq = {status:"none", mode:"portion", surah:1, fromAyah:1, toAyah:1};
   if (!rec.sabaqi) rec.sabaqi = {status:"none", juz: st.currentJuz || 1, amount: 0.25};
   if (!rec.manzil) rec.manzil = {status:"none", items: []};
@@ -601,15 +609,14 @@ async function renderEntry(app){
     ${last ? `<div class="hint"><b>Last sabaq:</b> ${esc(surah(last.surah).en)} ayah ${last.fromAyah}–${last.toAyah} (${fmtDateShort(last.date)}). Continue from ayah ${last.toAyah + 1 <= surah(last.surah).v.length ? last.toAyah + 1 : "next surah"}.</div>` : ""}
 
     <div class="card" style="margin-bottom:12px">
-      <div class="row spread">
-        <div class="field" style="margin:0"><label>Date</label><input type="date" id="recDate" value="${date}" max="${todayStr()}"></div>
-        <div>
-          <label style="font-size:.8rem;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px">Attendance</label>
-          <div class="seg" id="attSeg">
-            ${["present","absent","leave","sick"].map(a => `<button data-v="${a}" class="${rec.attendance === a ? "active" + (a === "absent" ? " absent" : "") : ""}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("")}
-          </div>
+      <div class="field"><label>Date</label><input type="date" id="recDate" value="${date}" max="${todayStr()}"></div>
+      ${[["attendance","Morning session attendance"],["attendance2","Evening session attendance"]].map(([key, lbl]) => `
+      <div style="margin-top:10px">
+        <label style="font-size:.8rem;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:4px">${lbl}</label>
+        <div class="seg att-seg" data-ses="${key}">
+          ${["present","absent","leave","sick"].map(a => `<button data-v="${a}" class="${rec[key] === a ? "active" + (a === "absent" ? " absent" : "") : ""}">${a[0].toUpperCase() + a.slice(1)}</button>`).join("")}
         </div>
-      </div>
+      </div>`).join("")}
     </div>
 
     <div id="lessonArea">
@@ -678,15 +685,15 @@ async function renderEntry(app){
   $("#backBtn").addEventListener("click", () => nav("profile", {studentId: st.id}));
   $("#recDate").addEventListener("change", e => nav("entry", {studentId: st.id, entryDate: e.target.value}));
 
-  $("#attSeg").addEventListener("click", e => {
+  $$(".att-seg").forEach(seg => seg.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
-    rec.attendance = b.dataset.v;
-    $$("#attSeg button").forEach(x => x.className = x === b ? "active" + (b.dataset.v === "absent" ? " absent" : "") : "");
-    if (rec.attendance !== "present"){
-      // absent / leave / sick: lessons default to missed
+    rec[seg.dataset.ses] = b.dataset.v;
+    $$("button", seg).forEach(x => x.className = x === b ? "active" + (b.dataset.v === "absent" ? " absent" : "") : "");
+    if (rec.attendance !== "present" && rec.attendance2 !== "present"){
+      // away the whole day: lessons default to missed
       ["sabaq","sabaqi","manzil"].forEach(sec => { if (rec[sec].status === "completed") setSecStatus(sec, "missed"); });
     }
-  });
+  }));
 
   function setSecStatus(sec, v){
     rec[sec].status = v;
@@ -923,7 +930,7 @@ function rangeRecords(records, from, to){
 }
 function recordRowsTable(recs){
   if (!recs.length) return "<p>No daily records in this period.</p>";
-  return `<table><tr><th>Date</th><th>Attendance</th><th>Sabaq (new lesson)</th><th>Sabaqi</th><th>Manzil</th></tr>
+  return `<table><tr><th>Date</th><th>Attendance (morn / eve)</th><th>Sabaq (new lesson)</th><th>Sabaqi</th><th>Manzil</th></tr>
     ${recs.map(r => {
       let sb = "—";
       if (r.sabaq?.status === "completed")
@@ -935,7 +942,9 @@ function recordRowsTable(recs){
       let mz = r.manzil?.status === "completed" && r.manzil.items?.length
         ? r.manzil.items.map(it => `J${it.juz} ${fracLabel(it.amount)}`).join(", ")
         : r.manzil?.status === "missed" ? "Missed" : "—";
-      return `<tr><td>${fmtDateShort(r.date)}</td><td>${r.attendance[0].toUpperCase() + r.attendance.slice(1)}</td><td>${sb}</td><td>${sq}</td><td>${mz}</td></tr>`;
+      const cap = a => a[0].toUpperCase() + a.slice(1);
+      const attCell = attSessions(r).map(cap).join(" / ");
+      return `<tr><td>${fmtDateShort(r.date)}</td><td>${attCell}</td><td>${sb}</td><td>${sq}</td><td>${mz}</td></tr>`;
     }).join("")}</table>`;
 }
 
@@ -959,7 +968,7 @@ async function weeklyReport(studentId, anyDate, opts){
       {v: s.attendancePct + "%", l: "Attendance"},
       {v: Math.round((s.sabaqi + s.manzil) * 100) / 100, l: "Juz revised"}
     ])}
-    <div class="r-sec">Attendance</div>
+    <div class="r-sec">Attendance (morning + evening sessions)</div>
     <table><tr><th>Present</th><th>Absent</th><th>Leave</th><th>Sick</th><th>Attendance %</th></tr>
     <tr><td>${s.present}</td><td>${s.absent}</td><td>${s.leave}</td><td>${s.sick}</td><td>${s.attendancePct}%</td></tr></table>
     <div class="r-sec">Summary of the Week</div>
@@ -967,7 +976,7 @@ async function weeklyReport(studentId, anyDate, opts){
       <tr><th>New lesson (Sabaq)</th><td>${Math.round(s.lines * 10) / 10} lines · ${s.ayahs} ayahs · ${s.sabaqDays} day(s) completed · ${s.sabaqMissed} missed</td></tr>
       <tr><th>Current juz revision (Sabaqi)</th><td>${Math.round(s.sabaqi * 100) / 100} juz revised · ${s.sabaqiDays} day(s) · ${s.sabaqiMissed} missed</td></tr>
       <tr><th>Old juz revision (Manzil)</th><td>${Math.round(s.manzil * 100) / 100} juz revised · ${s.manzilDays} day(s) · ${s.manzilMissed} missed</td></tr>
-      <tr><th>Missed days (absent)</th><td>${s.absent}</td></tr>
+      <tr><th>Missed sessions (absent)</th><td>${s.absent}</td></tr>
     </table>
     <div class="r-sec">Daily Detail</div>
     ${recordRowsTable(recs)}
@@ -1009,7 +1018,7 @@ async function monthlyReport(studentId, monthKey, opts){
     ])}
     <div class="r-sec">Month at a Glance</div>
     <table>
-      <tr><th>Attendance</th><td>${s.attendancePct}% (${s.present} present / ${s.total} days recorded)</td></tr>
+      <tr><th>Attendance</th><td>${s.attendancePct}% (${s.present} present / ${s.total} sessions recorded)</td></tr>
       <tr><th>New lessons completed</th><td>${s.sabaqDays} day(s)</td></tr>
       <tr><th>Total lines memorized</th><td>${Math.round(s.lines * 10) / 10}</td></tr>
       <tr><th>Total ayahs memorized</th><td>${s.ayahs}</td></tr>
@@ -1206,9 +1215,9 @@ async function renderSettings(app){
     const students = await dbAll("students");
     const byId = Object.fromEntries(students.map(s => [s.id, s.name]));
     const records = (await dbAll("records")).sort((a, b) => a.date < b.date ? -1 : 1);
-    const head = ["Date","Student","Attendance","Sabaq Status","Sabaq Portion","Sabaq Lines","Sabaq Ayahs","Sabaqi Status","Sabaqi Juz","Sabaqi Amount","Manzil Status","Manzil Detail","Notes"];
+    const head = ["Date","Student","Attendance Morning","Attendance Evening","Sabaq Status","Sabaq Portion","Sabaq Lines","Sabaq Ayahs","Sabaqi Status","Sabaqi Juz","Sabaqi Amount","Manzil Status","Manzil Detail","Notes"];
     const rows = records.map(r => [
-      r.date, byId[r.studentId] || r.studentId, r.attendance,
+      r.date, byId[r.studentId] || r.studentId, r.attendance, r.attendance2 ?? "",
       r.sabaq?.status || "", r.sabaq?.mode === "portion" ? `${surah(r.sabaq.surah).en} ${r.sabaq.fromAyah}-${r.sabaq.toAyah}` : "",
       r.sabaq?.estLines || "", r.sabaq?.ayahs || "",
       r.sabaqi?.status || "", r.sabaqi?.juz || "", r.sabaqi?.status === "completed" ? fracLabel(r.sabaqi.amount) : "",

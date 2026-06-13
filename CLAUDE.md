@@ -17,7 +17,10 @@ never assume coding knowledge, and handle all code yourself.
 3. **Performance first.** Must stay fast on low-end Android. Animate only
    transform/opacity. Must handle 500+ students and years of records.
 4. **Never modify `quran-data.js`** (complete Quran text, 114 surahs,
-   6,236 ayahs, Uthmani script + juz start table + CHARS_PER_LINE constant).
+   6,236 ayahs, IndoPak/hafizi script + juz start table + CHARS_PER_LINE
+   constant). Switched from Uthmani to IndoPak on 2026-06-13 at the owner's
+   request, validated against per-surah ayah counts; the Uthmani version is
+   preserved in git history (commit 521b2ea).
 5. **Storage is IndexedDB** (database name `hifz_madrasa`). Never switch to
    localStorage for records. Never break backward compatibility with
    existing stored data or backup JSON files — teachers have real data.
@@ -39,7 +42,11 @@ never assume coding knowledge, and handle all code yourself.
 - `students`: {id, name, arabicName, age, parentName, parentPhone, address,
   admissionDate, currentJuz, currentSurah, notes}
 - `records` (one per student per date, unique index [studentId, date]):
-  {id, studentId, date "YYYY-MM-DD", attendance "present|absent|leave|sick",
+  {id, studentId, date "YYYY-MM-DD",
+   attendance "present|absent|leave|sick" (morning session),
+   attendance2 same values (evening session; old records don't have this
+   field — a record without attendance2 is a single-session day, see
+   attSessions()),
    sabaq:{status "completed|missed|none", mode "portion|lines", surah,
           fromAyah, toAyah, lines, ayahs, estLines},
    sabaqi:{status, juz, amount (fraction of juz, e.g. 0.25), note},
