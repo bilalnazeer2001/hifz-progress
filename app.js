@@ -190,7 +190,7 @@ function lastSabaqPortion(records){
 }
 
 /* ================= STATE & ROUTER ================= */
-const state = {view: "dashboard", studentId: null, search: "", juzFilter: ""};
+const state = {view: "dashboard", studentId: null, search: "", juzFilter: "", regOpen: null};
 let SETTINGS = {madrasa: "", teacher: ""};
 
 function nav(view, extra = {}){
@@ -270,6 +270,39 @@ async function renderDashboard(app){
 
   const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
 
+  // quick attendance registers (mark the whole class from the dashboard)
+  const todayBy = {};
+  for (const r of todayRecs) todayBy[r.studentId] = r;
+  const regList = [...students].sort((a, b) => a.name.localeCompare(b.name));
+  const sesMarked = (st, ses) => {
+    const r = todayBy[st.id];
+    return r && (ses === "attendance" || r.attendance2 !== undefined);
+  };
+  const regCard = (ses, title) => {
+    const marked = regList.filter(st => sesMarked(st, ses)).length;
+    const open = state.regOpen === ses;
+    return `
+    <div class="card reg-card" data-ses="${ses}">
+      <button class="reg-head" data-act="toggle">
+        <span>${title}</span>
+        <span class="chip ${marked === regList.length ? "ok" : "mut"}" data-role="count">${marked}/${regList.length} marked</span>
+        <span class="reg-arrow">${open ? "▴" : "▾"}</span>
+      </button>
+      <div class="reg-body" ${open ? "" : "hidden"}>
+        <button class="btn sm ghost" data-act="allpresent">✓ Mark all present</button>
+        ${regList.map(st => {
+          const r = todayBy[st.id];
+          const v = r ? (ses === "attendance" ? r.attendance : r.attendance2) : undefined;
+          return `<div class="reg-row" data-id="${st.id}">
+            <span class="reg-name">${esc(st.name)}</span>
+            <span class="att-mini">${["present","absent","leave","sick"].map(a =>
+              `<button data-v="${a}" class="${v === a ? "on-" + a : ""}" title="${a[0].toUpperCase() + a.slice(1)}" aria-label="${a}">${a[0].toUpperCase()}</button>`).join("")}</span>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>`;
+  };
+
   app.innerHTML = `
     <div class="hero">
       <div class="arabic">السَّلَامُ عَلَيْكُمْ وَرَحْمَةُ اللهِ</div>
@@ -285,6 +318,8 @@ async function renderDashboard(app){
       ${statCard("book", Math.round(weekLines * 10) / 10, "Lines this week", "gold")}
       ${statCard("cal", Math.round(monthLines * 10) / 10, "Lines this month", "gold")}
     </div>
+
+    ${students.length ? regCard("attendance", "Morning Attendance Register") + regCard("attendance2", "Evening Attendance Register") : ""}
 
     <div class="row spread" style="margin-bottom:14px">
       <input class="search-input" id="searchBox" placeholder="Search by name, parent or phone…" value="${esc(state.search)}">
@@ -329,6 +364,61 @@ async function renderDashboard(app){
         <span class="arabic">وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ</span>
         ${students.length ? "No students match your search." : "No students yet. Tap <b>+ Add Student</b> above to begin."}
       </div></div>`}`;
+
+  /* ---- attendance registers ---- */
+  async function markAtt(studentId, ses, v){
+    let r = todayBy[studentId] || await recordOf(studentId, today);
+    if (!r){
+      r = {studentId, date: today, attendance: v,
+           sabaq: {status: "none", mode: "portion", surah: 1, fromAyah: 1, toAyah: 1, lines: "", ayahs: 0, estLines: 0},
+           sabaqi: {status: "none", juz: 1, amount: 0.25},
+           manzil: {status: "none", items: []}, notes: ""};
+      // evening-first marking: assume the same status for the morning (teacher can correct it)
+      if (ses === "attendance2") r.attendance2 = v;
+    } else {
+      r[ses] = v;
+    }
+    const key = await dbPut("records", r);
+    if (!r.id && key) r.id = key;
+    todayBy[studentId] = r;
+  }
+  function refreshRegHeads(){
+    $$(".reg-card", app).forEach(card => {
+      const marked = regList.filter(st => sesMarked(st, card.dataset.ses)).length;
+      const chip = $('[data-role="count"]', card);
+      chip.textContent = `${marked}/${regList.length} marked`;
+      chip.className = `chip ${marked === regList.length ? "ok" : "mut"}`;
+    });
+    const recs = Object.values(todayBy);
+    const nums = $$(".grid-stats .num", app);
+    nums[1].textContent = recs.filter(r => attSessions(r).includes("present")).length;
+    nums[2].textContent = recs.filter(r => !attSessions(r).includes("present")).length;
+  }
+  $$(".reg-card", app).forEach(card => {
+    const ses = card.dataset.ses;
+    card.addEventListener("click", async e => {
+      const act = e.target.closest("[data-act]")?.dataset.act;
+      if (act === "toggle"){
+        state.regOpen = state.regOpen === ses ? null : ses;
+        render();
+        return;
+      }
+      if (act === "allpresent"){
+        for (const st of regList) await markAtt(st.id, ses, "present");
+        $$(".reg-row .att-mini", card).forEach(m =>
+          $$("button", m).forEach(x => x.className = x.dataset.v === "present" ? "on-present" : ""));
+        refreshRegHeads();
+        toast("All marked present");
+        return;
+      }
+      const b = e.target.closest(".att-mini button");
+      if (!b) return;
+      const id = Number(e.target.closest(".reg-row").dataset.id);
+      await markAtt(id, ses, b.dataset.v);
+      $$("button", b.parentElement).forEach(x => x.className = x === b ? "on-" + b.dataset.v : "");
+      refreshRegHeads();
+    });
+  });
 
   $("#searchBox").addEventListener("input", e => {
     state.search = e.target.value;
@@ -578,15 +668,26 @@ async function renderEntry(app){
   const date = state.entryDate || todayStr();
   const existing = await recordOf(st.id, date);
 
+  // a "stub" is a record created by the dashboard attendance register:
+  // attendance only, no lessons yet — prefill lesson defaults as for a new day
+  const isStub = existing
+    && (!existing.sabaq || existing.sabaq.status === "none")
+    && (!existing.sabaqi || existing.sabaqi.status === "none")
+    && (!existing.manzil || (existing.manzil.status === "none" && !(existing.manzil.items || []).length))
+    && !existing.notes;
+
   // editable working copy
-  const rec = existing ? JSON.parse(JSON.stringify(existing)) : {
+  const rec = existing && !isStub ? JSON.parse(JSON.stringify(existing)) : {
     studentId: st.id, date, attendance: "present", attendance2: "present",
     sabaq: {status: "completed", mode: "portion", surah: last ? last.surah : (st.currentSurah || 1),
             fromAyah: last ? Math.min(last.toAyah + 1, surah(last.surah).v.length) : 1,
             toAyah: last ? Math.min(last.toAyah + 1, surah(last.surah).v.length) : 1, lines: "", ayahs: 0, estLines: 0},
     sabaqi: {status: "completed", juz: st.currentJuz || 1, amount: 0.25},
     manzil: {status: "completed", items: [{juz: Math.max(1, (st.currentJuz || 1) - 1), amount: 0.5}]},
-    notes: ""
+    notes: "",
+    // keep the stub's identity and its already-marked attendance
+    ...(isStub ? {id: existing.id, attendance: existing.attendance,
+                  ...(existing.attendance2 !== undefined ? {attendance2: existing.attendance2} : {})} : {})
   };
   // old records had only one attendance per day — start evening from morning's value
   if (rec.attendance2 === undefined) rec.attendance2 = rec.attendance;
@@ -604,7 +705,7 @@ async function renderEntry(app){
   app.innerHTML = `
     <button class="back-link" id="backBtn">‹ ${esc(st.name)}</button>
     <h1 class="page-title">Daily Progress — ${esc(st.name)}</h1>
-    <p class="page-sub">${existing ? "Editing existing record for this date." : "New record."} All data is saved on this device.</p>
+    <p class="page-sub">${existing ? (isStub ? "Attendance already marked from the register — now add today's lessons." : "Editing existing record for this date.") : "New record."} All data is saved on this device.</p>
 
     ${last ? `<div class="hint"><b>Last sabaq:</b> ${esc(surah(last.surah).en)} ayah ${last.fromAyah}–${last.toAyah} (${fmtDateShort(last.date)}). Continue from ayah ${last.toAyah + 1 <= surah(last.surah).v.length ? last.toAyah + 1 : "next surah"}.</div>` : ""}
 

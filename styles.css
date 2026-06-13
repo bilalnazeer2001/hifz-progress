@@ -178,6 +178,30 @@ a{color:var(--emerald)}
 .sc-menu button.del{color:var(--danger)}
 .sc-menu button.del:hover{background:var(--danger-soft);border-color:var(--danger)}
 
+/* ---------- attendance registers ---------- */
+.reg-card{padding:0;overflow:hidden;margin-bottom:10px}
+.reg-head{
+  width:100%;display:flex;align-items:center;gap:10px;padding:14px 16px;
+  background:none;border:none;font-weight:700;font-size:.95rem;color:var(--ink);
+  font-family:inherit;cursor:pointer;text-align:left;
+}
+.reg-head .chip{margin-left:auto}
+.reg-arrow{color:var(--ink-soft);font-size:.8rem}
+.reg-body{padding:0 16px 14px}
+.reg-body > .btn{margin-bottom:6px}
+.reg-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed var(--line)}
+.reg-name{flex:1;font-size:.88rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-mini{display:flex;gap:5px;flex:none}
+.att-mini button{
+  width:34px;height:34px;border-radius:9px;border:1.5px solid var(--line);
+  background:var(--surface);font-size:.74rem;font-weight:800;color:var(--ink-soft);
+  transition:background .12s,color .12s,border-color .12s;
+}
+.att-mini button.on-present{background:var(--emerald);border-color:var(--emerald);color:#fff}
+.att-mini button.on-absent{background:var(--danger);border-color:var(--danger);color:#fff}
+.att-mini button.on-leave{background:linear-gradient(135deg,var(--gold-bright),var(--gold));border-color:var(--gold);color:#33270A}
+.att-mini button.on-sick{background:#8A6D10;border-color:#8A6D10;color:#fff}
+
 /* ---------- chips & badges ---------- */
 .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:.72rem;font-weight:700}
 .chip.ok{background:var(--emerald-soft);color:var(--ok)}
