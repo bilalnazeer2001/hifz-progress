@@ -1,6 +1,6 @@
 /* Hifz Progress — offline service worker */
-const CACHE = "hifz-v9";
-const ASSETS = ["./","index.html","styles.css","app.js","quran-data.js","manifest.json","icon.svg","icon-192.png","icon-512.png"];
+const CACHE = "hifz-v10";
+const ASSETS = ["./","index.html","styles.css","app.js","quran-data.js","fonts/scheherazade-arabic.woff2","manifest.json","icon.svg","icon-192.png","icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

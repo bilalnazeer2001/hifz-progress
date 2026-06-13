@@ -7,15 +7,31 @@ with no other files needed.
 
 Run with:  python build.py
 """
+import base64
 import re
 from pathlib import Path
 
 HERE = Path(__file__).parent
 OUT = HERE / "Hifz-Progress-AllInOne.html"
+FONT = "fonts/scheherazade-arabic.woff2"
 
 
 def read(name):
     return (HERE / name).read_text(encoding="utf-8")
+
+
+def inline_font(css):
+    """Replace the bundled-font url() with a base64 data: URI so the
+    single-file build needs no separate font file."""
+    data = (HERE / FONT).read_bytes()
+    b64 = base64.b64encode(data).decode("ascii")
+    uri = f"data:font/woff2;base64,{b64}"
+    new_css, n = re.subn(
+        r'url\("fonts/scheherazade-arabic\.woff2"\)',
+        lambda m: f'url("{uri}")', css, count=1)
+    if n == 0:
+        raise SystemExit("build.py: @font-face url for the Quran font not found in styles.css")
+    return new_css
 
 
 def safe_js(src):
@@ -26,7 +42,7 @@ def safe_js(src):
 
 def main():
     html = read("index.html")
-    css = read("styles.css")
+    css = inline_font(read("styles.css"))
     quran = safe_js(read("quran-data.js"))
     app = safe_js(read("app.js"))
 

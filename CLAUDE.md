@@ -36,6 +36,11 @@ never assume coding knowledge, and handle all code yourself.
 - `quran-data.js` — Quran database (DO NOT EDIT)
 - `sw.js` — service worker (cache-first). If you add/rename app files,
   update the ASSETS list AND bump the CACHE version string
+- `fonts/scheherazade-arabic.woff2` — bundled Quran font (SIL Scheherazade
+  New, OFL 1.1; Arabic subset, ~79 KB). Ships with the app so IndoPak/hafizi
+  text renders correctly + identically on every device offline. Referenced
+  via `@font-face` in styles.css and first in `--font-arabic`. `build.py`
+  embeds it as a base64 data: URI in the single-file version.
 - `manifest.json`, `icon.svg`, `icon-192.png`, `icon-512.png` — PWA install
 
 ## Data model (IndexedDB)
@@ -68,8 +73,8 @@ never assume coding knowledge, and handle all code yourself.
 3. Rebuild the single-file version after every change — create/maintain
    `build.py` that inlines styles.css, quran-data.js and app.js into
    index.html (replacing the link/script tags, removing manifest/icon links)
-   and writes `Hifz-Progress-AllInOne.html`. Both versions must always
-   stay in sync.
+   AND embeds the bundled Quran font as a base64 data: URI, then writes
+   `Hifz-Progress-AllInOne.html`. Both versions must always stay in sync.
 4. If `sw.js` assets changed, bump the cache version.
 5. Keep UI text simple and teacher-friendly. Keep the emerald/gold design
    language consistent. Arabic text uses class `arabic` (system Arabic fonts).
